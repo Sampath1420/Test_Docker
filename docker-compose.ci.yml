@@ -1,92 +1,36 @@
-name: ETL Pipeline CI
 
-on:
-  push:
-    branches: ["**"]
-  workflow_dispatch: {}
+version: "3.9"
 
-jobs:
-  build-and-run:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: brewdata
+      POSTGRES_USER: brewuser
+      POSTGRES_PASSWORD: brewpass
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "5432:5432"
+    networks:
+      - etl_net
 
-      - name: Set up Python for tests
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+  etl:
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: brewdata
+      POSTGRES_USER: brewuser
+      POSTGRES_PASSWORD: brewpass
+      POSTGRES_PORT: 5432
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - etl_net
 
-      - name: Install test deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest
-
-      - name: Run unit tests
-        run: |
-          export PYTHONPATH=$PWD
-          pytest -q
-
-      - name: Build ETL image
-        run: docker build -t etl-image:ci .
-
-      # Create a CI-only compose overlay that provides Postgres with *your* credentials
-      - name: Write docker-compose.ci.yml
-        run: |
-          cat > docker-compose.ci.yml << 'YAML'
-          version: "3.9"
-          services:
-            db:
-              image: postgres:16-alpine
-              environment:
-                POSTGRES_DB: sp
-                POSTGRES_USER: postgres
-                POSTGRES_PASSWORD: "#Sampath123"
-              healthcheck:
-                test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-                interval: 5s
-                timeout: 5s
-                retries: 40
-              ports:
-                - "5432:5432"
-              networks:
-                - etl_net
-
-            # Wire ETL to the CI DB via hostname 'db'
-            etl:
-              environment:
-                POSTGRES_HOST: db
-                POSTGRES_DB: sp
-                POSTGRES_USER: postgres
-                POSTGRES_PASSWORD: "#Sampath123"
-                POSTGRES_PORT: 5432
-              depends_on:
-                db:
-                  condition: service_healthy
-              networks:
-                - etl_net
-
-          networks:
-            etl_net:
-              driver: bridge
-          YAML
-
-      - name: Start CI Postgres and run ETL
-        run: |
-          docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d db
-          # Wait for DB to be healthy
-          for i in `seq 1 60`; do
-            docker compose -f docker-compose.yml -f docker-compose.ci.yml exec -T db pg_isready -U postgres -d sp && break || sleep 2
-          done
-          # Run ETL with overlay (POSTGRES_HOST=db, DB=sp, etc.)
-          docker compose -f docker-compose.yml -f docker-compose.ci.yml run --rm etl
-
-      - name: Show table row count
-        run: |
-          docker compose -f docker-compose.yml -f docker-compose.ci.yml exec -T db \
-            psql -U postgres -d sp -c "SELECT COUNT(*) AS rows FROM public.breweries;"
-
-      - name: Tear down
-        if: always()
-        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v
+networks:
+  etl_net:
+    driver: bridge
