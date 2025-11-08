@@ -5,9 +5,9 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: brewdata
-      POSTGRES_USER: brewuser
-      POSTGRES_PASSWORD: brewpass
+      POSTGRES_DB: sp
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "#Sampath123"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -20,10 +20,10 @@ services:
 
   etl:
     environment:
-      POSTGRES_HOST: db
-      POSTGRES_DB: brewdata
-      POSTGRES_USER: brewuser
-      POSTGRES_PASSWORD: brewpass
+      POSTGRES_HOST: localhost
+      POSTGRES_DB: sp
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "#Sampath123"
       POSTGRES_PORT: 5432
     depends_on:
       db:
