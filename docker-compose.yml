@@ -1,0 +1,20 @@
+
+version: "3.9"
+
+services:
+  etl:
+    build: .
+    container_name: etl_runner
+    environment:
+      POSTGRES_HOST: host.docker.internal
+      POSTGRES_DB: sp
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "#Sampath123"
+      POSTGRES_PORT: 5432
+    command: ["python", "-m", "etl.main"]
+    networks:
+      - etl_net
+
+networks:
+  etl_net:
+    driver: bridge
