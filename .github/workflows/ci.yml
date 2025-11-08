@@ -1,0 +1,47 @@
+
+name: ETL Pipeline CI
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch: {}
+
+jobs:
+  build-and-run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run Unit Tests
+        run: pytest -q
+
+      - name: Build ETL Image
+        run: docker build -t etl-image:ci .
+
+      - name: Run ETL with CI Postgres
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d db
+          for i in `seq 1 40`; do
+            docker compose -f docker-compose.yml -f docker-compose.ci.yml exec -T db pg_isready -U brewuser -d brewdata && break || sleep 2;
+          done
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml run --rm etl
+
+      - name: Show Row Count
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml exec -T db psql -U brewuser -d brewdata -c "SELECT COUNT(*) FROM public.breweries;"
+
+      - name: Cleanup
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v
