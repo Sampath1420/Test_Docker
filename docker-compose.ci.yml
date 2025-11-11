@@ -20,7 +20,7 @@ services:
 
   etl:
     environment:
-      POSTGRES_HOST: db
+      POSTGRES_HOST: localhost
       POSTGRES_DB: brewdata
       POSTGRES_USER: brewuser
       POSTGRES_PASSWORD: brewpass
